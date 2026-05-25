@@ -1,0 +1,794 @@
+보통 react query 사용할때 어떻게 사용하는지 간단한 예시 코드를 알려줘
+React Query(현재 이름 TanStack Query)는 서버 상태 관리를 위한 강력한 라이브러리입니다. 가장 흔하게 사용하는 패턴은 데이터를 가져오는 useQuery와 데이터를 변경하는 useMutation입니다.
+
+간단하고 명확한 예시 코드로 설명해 드릴게요.
+
+1. 기본 설정 (QueryClientProvider)
+앱 전체에서 React Query를 사용할 수 있도록 최상단에 설정을 추가해야 합니다.
+
+JavaScript
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
+function App() {
+  return (
+    // 앱 전체에 queryClient를 공급합니다.
+    <QueryClientProvider client={queryClient}>
+      <TodoList />
+    </QueryClientProvider>
+  );
+}
+2. 데이터 가져오기 (useQuery)
+서버에서 데이터를 읽어올 때 사용합니다. 로딩 상태와 에러 처리를 아주 쉽게 할 수 있습니다.
+
+JavaScript
+import { useQuery } from '@tanstack/react-query';
+
+function TodoList() {
+  // 'todos'라는 키로 데이터를 관리합니다.
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['todos'],
+    queryFn: () => fetch('https://api.example.com/todos').then(res => res.json()),
+  });
+
+  if (isLoading) return <div>로딩 중...</div>;
+  if (isError) return <div>에러 발생: {error.message}</div>;
+
+  return (
+    <ul>
+      {data.map(todo => (
+        <li key={todo.id}>{todo.title}</li>
+      ))}
+    </ul>
+  );
+}
+3. 데이터 수정하기 (useMutation)
+POST, PUT, DELETE 등 서버의 데이터를 변경할 때 사용합니다. 성공 후 데이터를 새로고침(invalidateQueries)하는 것이 핵심입니다.
+
+JavaScript
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+function AddTodo() {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (newTodo) => {
+      return fetch('https://api.example.com/todos', {
+        method: 'POST',
+        body: JSON.stringify(newTodo),
+      });
+    },
+    // 성공하면 'todos' 키를 가진 쿼리를 무효화해서 데이터를 다시 불러오게 합니다.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos'] });
+    },
+  });
+
+  return (
+    <button onClick={() => mutation.mutate({ title: '새로운 할 일' })}>
+      추가하기
+    </button>
+  );
+}
+💡 핵심 포인트
+queryKey: 데이터를 식별하는 고유한 키입니다. 배열 형태이며, 이 키가 다르면 서로 다른 데이터로 인식합니다.
+
+Caching: 한 번 가져온 데이터는 설정된 시간 동안 캐시에 저장되어, 다시 요청할 때 서버 부하를 줄이고 사용자 경험을 개선합니다.
+
+Auto Refetch: 사용자가 브라우저 탭을 다시 누르거나 네트워크가 재연결될 때 자동으로 최신 데이터를 가져오는 기능이 기본으로 켜져 있습니다.
+
+이 패턴이 가장 기본적인 "Standard" 방식입니다. 특정 API(예: Axios)와 함께 사용하고 싶으신가요?
+
+만약 API 호출을 동적으로 여러개 호출하고 싶으면 어떻게 처리할 수 있을까?
+API 호출을 동적으로, 즉 개수가 정해지지 않은 상태에서 여러 개 호출해야 할 때는 useQueries 훅을 사용합니다.
+
+일반적인 useQuery는 훅의 규칙(Hooks Rule) 때문에 반복문 안에서 사용할 수 없지만, useQueries는 배열을 인자로 받아 여러 개의 쿼리를 한 번에 처리할 수 있게 해줍니다.
+
+useQueries 사용 예시
+예를 들어, 여러 명의 사용자 ID 배열을 가지고 각각의 상세 정보를 가져와야 하는 상황이라고 가정해 보겠습니다.
+
+JavaScript
+import { useQueries } from '@tanstack/react-query';
+
+function UserProfiles({ userIds }) {
+  // userIds = [1, 2, 3] 과 같은 배열
+  const results = useQueries({
+    queries: userIds.map((id) => ({
+      queryKey: ['user', id],
+      queryFn: () => fetch(`https://api.example.com/users/${id}`).then(res => res.json()),
+      // 각 쿼리마다 개별 옵션 설정 가능
+      staleTime: 1000 * 60, 
+    })),
+  });
+
+  // results는 각 쿼리의 결과(data, isLoading, isError 등)가 담긴 배열입니다.
+  const isLoading = results.some((result) => result.isLoading);
+  const isError = results.some((result) => result.isError);
+
+  if (isLoading) return <div>모든 사용자 정보 로딩 중...</div>;
+  if (isError) return <div>일부 정보를 가져오는 데 실패했습니다.</div>;
+
+  return (
+    <div>
+      {results.map((result, index) => (
+        <div key={userIds[index]}>
+          {result.data.name}님 반가워요!
+        </div>
+      ))}
+    </div>
+  );
+}
+주요 특징 및 팁
+동적 배열 처리: map 함수를 사용하여 queries 배열을 동적으로 생성하므로, ID 배열의 길이에 상관없이 안전하게 호출할 수 있습니다.
+
+병렬 실행 (Parallel): useQueries는 내부적으로 모든 쿼리를 병렬로 실행합니다. 즉, 하나씩 순차적으로 기다리는 것이 아니라 동시에 요청을 보냅니다.
+
+결과 핸들링: 반환값은 각 쿼리 상태가 담긴 배열입니다. some이나 every 같은 JS 배열 메서드를 사용하여 전체 로딩 상태나 에러 상태를 쉽게 체크할 수 있습니다.
+
+독립적 캐싱: 각 쿼리는 고유한 queryKey를 가지므로, 개별적으로 캐싱되고 관리됩니다.
+
+참고: 만약 단순히 API 하나에서 여러 데이터를 한꺼번에 주는 형태라면 useQuery 하나로 충분하겠지만, 위처럼 엔드포인트가 다르거나 파라미터별로 개별 호출이 필요할 때는 useQueries가 정답입니다.
+
+혹시 이 호출 결과들을 하나로 합쳐서 가공하고 싶은 특정 상황이 있으신가요?
+
+redux-saga를 사용중이라면 queryKey를 사용해야해?
+결론부터 말씀드리면, React Query를 도입하신다면 queryKey는 반드시 사용해야 합니다. 하지만 근본적인 고민은 "Redux-Saga와 React Query를 같이 써야 하는가?"일 것 같아요. 이 둘은 역할이 겹치는 부분이 많거든요. 상황별로 명확하게 정리해 드릴게요.
+
+1. 왜 queryKey가 필수인가요?
+React Query에서 queryKey는 단순한 이름표가 아니라 데이터베이스의 Primary Key와 같습니다.
+
+캐싱 관리: React Query는 이 키를 바탕으로 "이미 받은 데이터가 있는지" 확인합니다.
+
+자동 리프레시: 특정 데이터를 다시 불러오고 싶을 때(Invalidation), 어떤 데이터를 불러올지 이 키로 식별합니다.
+
+Saga와의 차이: Saga는 '액션의 흐름'을 제어하지만, React Query는 '데이터의 상태와 캐시'를 제어합니다.
+
+2. Redux-Saga와 함께 사용할 때의 시나리오
+Case A: API 로직을 React Query로 점진적 이관 (권장)
+많은 팀이 API 통신(Loading, Error, Data 관리)은 React Query에 맡기고, 순수하게 클라이언트 측의 복잡한 전역 상태나 사이드 이펙트만 Redux-Saga에 남기는 추세를 보입니다.
+
+이 경우, API 호출부에서는 Saga를 거치지 않고 직접 useQuery를 사용하며, 이때 당연히 queryKey를 정의하게 됩니다.
+
+Case B: Saga 내부에서 React Query의 기능을 쓰고 싶은 경우
+만약 "Saga의 로직은 그대로 두고 캐싱만 React Query를 쓰고 싶다"는 의미라면, 이는 오히려 구조를 복잡하게 만들 수 있습니다.
+
+React Query는 Hook 기반이라서 Saga(Generator 함수) 내부에서 직접 호출하기 어렵기 때문입니다.
+
+굳이 연동한다면 queryClient.fetchQuery(['key'], fn) 처럼 명령형 메서드를 쓸 수 있지만, 이 역시 queryKey는 무조건 필요합니다.
+
+3. Redux-Saga vs React Query 비교
+구분	Redux-Saga	React Query
+주 목적	비동기 흐름 제어 (Side Effects)	서버 상태 관리 및 캐싱
+코드 양	Action, Reducer, Saga 등 보일러플레이트가 많음	Hook 하나로 로딩/에러/데이터 처리 가능
+캐싱/재요청	직접 로직을 구현해야 함	queryKey 기반으로 자동 수행
+사용 시점	소켓 연결, 복잡한 비즈니스 워크플로우	단순 API 호출 및 데이터 동기화
+💡 현실적인 조언
+만약 현재 프로젝트에서 API 데이터를 받아와서 Redux 스토어에 저장하는 용도로만 Saga를 쓰고 계시다면, 그 부분은 Saga와 Redux를 걷어내고 React Query로 교체하는 것을 추천합니다.
+
+Saga를 유지해야 할 때: 비동기 작업 간의 정교한 순서 제어(예: 특정 액션이 들어올 때까지 대기, Debounce/Throttle의 복잡한 조합 등)가 필요할 때.
+
+React Query로 갈아탈 때: "API 로딩 바 보여주기", "에러 처리하기", "데이터 캐싱하기"가 주 목적일 때.
+
+이미 Saga로 구축된 프로젝트에 React Query를 부분 도입하시는 상황인가요? 아니면 완전히 새로 설계 중이신가요?
+
+비동기로 양방향 통신으로 인한 액션 처리가 필요하고 공통으로 사용하는 값을 store에 redux-saga로 관리하고 있었어
+아, 소켓(Socket.io, WebSocket) 등을 이용한 양방향 통신과 복잡한 비즈니스 로직이 얽혀 있는 상황이시군요! 이럴 때는 전략을 잘 짜야 합니다.
+
+결론부터 말씀드리면, "서버 상태(데이터 페칭)는 React Query"로 넘기되, "실시간 이벤트 스트림과 전역 상태는 Redux-Saga"에 남기는 하이브리드 방식이 가장 효율적입니다.
+
+이때 queryKey를 어떻게 활용하고 Saga와 조화시킬지 구체적인 가이드를 드릴게요.
+
+1. 역할 분담 가이드
+Redux-Saga의 역할:
+
+소켓 연결 및 채널 관리 (eventChannel 사용)
+
+서버에서 푸시되는 실시간 액션 처리
+
+여러 API가 복합적으로 얽힌 복잡한 워크플로우 제어
+
+React Query의 역할:
+
+초기 데이터 로딩 (GET 요청)
+
+사용자 액션에 의한 데이터 수정 (POST/PUT/DELETE)
+
+캐싱 및 수동 데이터 갱신 (invalidateQueries)
+
+2. Saga에서 React Query 데이터 제어하기
+Saga 로직 중에 "실시간 알림을 받았으니 특정 데이터를 다시 불러와야 해!"라는 상황이 생기면, Saga 내부에서 queryClient를 직접 참조하여 특정 queryKey를 무효화할 수 있습니다.
+
+JavaScript
+// queryClient 인스턴스를 가져옵니다 (보통 별도 파일로 분리)
+import { queryClient } from './main'; 
+
+function* socketEventSaga() {
+  const channel = yield call(createSocketChannel);
+  while (true) {
+    const action = yield take(channel);
+    
+    if (action.type === 'UPDATE_DATA_RECEIVED') {
+      // ✅ Saga 내부에서 React Query의 캐시를 무효화!
+      // 이 순간 해당 queryKey를 쓰는 모든 컴포넌트가 새 데이터를 가져옵니다.
+      yield call([queryClient, 'invalidateQueries'], { queryKey: ['todos'] });
+    }
+  }
+}
+3. Redux Store와 React Query의 공존
+"공통으로 사용하는 값"이 무엇이냐에 따라 판단이 달라집니다.
+
+데이터 성격	추천 저장소	이유
+서버에서 온 리스트/상세 정보	React Query	로딩, 에러, 캐싱 처리가 자동화됨. queryKey로 관리.
+UI 상태 (모달 오픈 여부, 다크모드)	Redux	서버와 상관없는 순수 클라이언트 상태.
+양방향 통신 세션/토큰/실시간 로그	Redux + Saga	지속적인 스트림 처리가 필요하며, 여러 곳에서 즉각 반응해야 함.
+4. 주의할 점: queryKey는 반드시 필요
+Saga를 쓰더라도 React Query를 도입하는 순간 queryKey는 무조건 정의해야 합니다. React Query는 Redux처럼 "액션 타입"으로 움직이는 게 아니라, "키(Key)"를 기준으로 데이터를 찾기 때문입니다.
+
+💡 팁: Saga에서 가공된 데이터를 React Query 캐시에 직접 집어넣고 싶을 때는 queryClient.setQueryData(['queryKey'], newData)를 사용할 수도 있습니다.
+
+요약하자면
+현재의 Saga 로직(양방향 통신, 복잡한 사이드 이펙트)은 그대로 유지하세요. 다만, 단순히 API를 호출해서 Store에 저장하고 로딩 바를 띄우던 "단순 조회용 코드"들만 React Query로 하나씩 옮기시는 것을 추천합니다.
+
+이렇게 하면 Redux의 보일러플레이트 코드가 획기적으로 줄어들면서도, Saga의 강력한 제어권은 유지할 수 있습니다.
+
+혹시 지금 Saga에서 takeLatest나 throttle 같은 기능을 아주 헤비하게 쓰고 계신 로직이 있나요? 그런 부분은 Saga에 남겨두는 게 훨씬 유리합니다.
+
+react-query를 사용하는 장점을 알려줘
+React Query(TanStack Query)를 사용하면 얻게 되는 가장 큰 이점은 "개발자가 직접 하던 귀찮고 복잡한 서버 상태 관리 업무를 알아서 대신 해준다"는 점입니다.
+
+단순히 fetch를 편하게 하는 수준을 넘어, 성능과 사용자 경험 측면에서 강력한 도구들이 내장되어 있습니다. 주요 장점들을 정리해 드릴게요.
+
+1. 선언적인 로딩 및 에러 처리
+기본적인 fetch를 쓰면 isLoading, isError 같은 상태 변수를 매번 만들고 관리해야 하지만, React Query는 이를 객체 형태로 바로 제공합니다.
+
+코드 감소: useState, useEffect를 주렁주렁 달지 않아도 됩니다.
+
+가독성: 비즈니스 로직에만 집중할 수 있어 코드가 매우 깔끔해집니다.
+
+2. 강력한 캐싱 (Caching) 시스템
+가장 핵심적인 장점입니다. 동일한 데이터를 다시 요청할 때 서버에 또 묻지 않고 캐시된 데이터를 즉시 보여줍니다.
+
+속도: 사용자는 페이지 이동 시 기다림 없이 데이터를 즉시 보게 됩니다.
+
+대역폭 절약: 불필요한 API 호출을 줄여 서버 부하를 최소화합니다.
+
+Stale-While-Revalidate: 뒷단에서 조용히 새 데이터를 가져와 캐시를 업데이트하므로 사용자는 항상 "최신성"을 보장받습니다.
+
+3. 제로 설정에 가까운 자동 업데이트
+별도의 코드 작성 없이도 다음과 같은 상황에서 데이터를 자동으로 새로고침합니다.
+
+Window Focus: 브라우저 탭을 다시 눌렀을 때 (사용자가 돌아왔을 때)
+
+Reconnect: 네트워크가 끊겼다가 다시 연결되었을 때
+
+Mount: 컴포넌트가 다시 화면에 나타났을 때
+
+4. 데이터 동기화와 Invalidation (queryKey 활용)
+데이터가 수정(mutation)되었을 때, 이와 연관된 다른 데이터들을 즉시 최신 상태로 바꿀 수 있습니다.
+
+예를 들어, "글 작성" API가 성공하면 ['posts'] 키를 가진 데이터를 무효화(invalidate)하여 리스트를 자동으로 다시 불러오게 만듭니다. Redux처럼 복잡한 상태 업데이트 로직을 직접 짤 필요가 없습니다.
+
+5. 중복 요청 제거 (Deduping)
+페이지 안의 여러 컴포넌트에서 동시에 같은 API를 호출하더라도, React Query는 이를 하나로 묶어 딱 한 번만 서버에 요청을 보냅니다.
+
+Redux vs React Query 장점 비교
+기능	Redux (+Saga/Thunk)	React Query
+코드량	매우 많음 (액션, 리듀서 등)	매우 적음 (Hook 기반)
+서버 데이터 관리	수동으로 관리 (성공/실패 분기 직접 작성)	자동으로 관리 (상태값 기본 제공)
+캐싱	직접 로직 구현 필요	기본 내장
+데이터 만료 설정	어려움	staleTime, gcTime으로 간단히 조절
+💡 한 줄 요약
+"서버에서 가져오는 데이터는 React Query에 맡기고, 당신은 앱의 진짜 핵심 기능(UI/UX) 개발에만 집중하세요."
+
+현재 프로젝트에서 Redux-Saga로 일일이 API 상태를 관리하고 계셨다면, React Query 도입 시 코드의 50% 이상이 사라지는 마법을 경험하실 수 있습니다.
+
+추가로 React Query의 설정 값(staleTime 등)에 대해 더 궁금한 점이 있으신가요?
+
+만약 사용자의 로그인 토큰값이 expired 되었다면 다시 자동 업데이트가 되면 안되는 상황이 있어 그럴때 react-query는 어떻게 작동되는거야?
+로그인 토큰이 만료되었는데도 React Query가 배경에서 계속 데이터를 가져오려고 시도하면, 불필요한 401 에러가 쌓이고 서버 부하가 발생할 수 있습니다.
+
+React Query는 이런 상황을 세밀하게 제어할 수 있는 장치들을 가지고 있습니다. 주로 사용하는 3가지 전략을 알려드릴게요.
+
+1. enabled 옵션을 통한 실행 제어 (가장 권장됨)
+useQuery에는 enabled라는 옵션이 있습니다. 이 값이 false이면 쿼리가 자동으로 실행되지 않습니다. 전역 상태(Redux 등)에 있는 토큰의 존재 여부를 이 옵션에 연결하면 됩니다.
+
+JavaScript
+const { data } = useQuery({
+  queryKey: ['userPrivateData'],
+  queryFn: fetchPrivateData,
+  // ✅ 토큰이 있을 때만 쿼리를 활성화합니다.
+  // 토큰이 만료되어 null이 되거나 비워지면, 모든 자동 업데이트가 즉시 중단됩니다.
+  enabled: !!accessToken, 
+});
+2. 전역 에러 핸들링과 retry 제한
+토큰이 만료되어 401 에러가 났을 때, React Query가 계속 재시도(Retry)를 하면 안 되겠죠?
+
+retry 설정: 특정 에러 코드(401, 403 등)일 때는 재시도를 하지 않도록 설정할 수 있습니다.
+
+전역 QueryClient 설정:
+
+JavaScript
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // 에러 발생 시 재시도 로직
+      retry: (failureCount, error) => {
+        // ✅ 토큰 만료 에러(401)라면 재시도하지 않음
+        if (error.response?.status === 401) return false;
+        return failureCount < 3; // 그 외 에러는 3번까지 재시도
+      },
+    },
+  },
+});
+3. Axios Interceptor와의 조합 (실무 패턴)
+보통 React Query 내부의 queryFn에서 Axios를 많이 사용합니다. Axios Interceptor에서 401 에러를 감지하면 로그아웃 처리를 하거나 토큰을 비워버리게 설정합니다.
+
+Interceptor: 401 에러 감지 → 전역 스토어의 accessToken 삭제.
+
+React Query: enabled: !!accessToken에 의해 모든 쿼리가 즉시 중단됨.
+
+💡 요약: 토큰 만료 시 작동 방식
+토큰이 만료되어 전역 상태에서 토큰이 사라지면, React Query는 다음과 같이 반응합니다.
+
+자동 Re-fetch 중단: enabled 조건이 false가 되면서 브라우저 포커스나 네트워크 재연결 시에도 데이터를 새로 가져오지 않습니다.
+
+캐시 유지 혹은 삭제: 필요에 따라 queryClient.clear()를 호출해 메모리에 남아있는 민감한 서버 데이터를 모두 지울 수 있습니다.
+
+즉, React Query가 스스로 토큰 만료를 눈치채는 것이 아니라, 우리가 enabled 옵션이나 전역 설정을 통해 "토큰이 없으니 이제 멈춰!"라고 알려주는 방식입니다.
+
+혹시 토큰 만료 시 자동으로 로그아웃 페이지로 이동시키는 로직과 연동하고 싶으신가요? 하이브리드 구조(Saga + React Query)라면 Saga에서 이 흐름을 제어하기가 더 수월할 수 있습니다.
+
+Saga + React Query + axios의 조합으로 다시 코딩해줄 수 있어?
+Saga, React Query, Axios를 함께 사용하는 하이브리드 구조의 실전 예제 코드를 작성해 드릴게요.
+
+이 구조의 핵심은 "API 데이터 관리는 React Query"가 담당하고, "인증(Token) 만료나 전역적인 흐름 제어는 Saga"가 담당하는 것입니다.
+
+1. Axios 인스턴스 설정 (인터셉터 활용)
+토큰 만료 시 Saga로 신호를 보내기 위해 Axios 인터셉터를 설정합니다.
+
+JavaScript
+import axios from 'axios';
+import { store } from './redux/store';
+
+const api = axios.create({
+  baseURL: 'https://api.example.com',
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // ✅ 401 에러 발생 시 Saga가 감시하는 액션을 디스패치
+      store.dispatch({ type: 'AUTH/TOKEN_EXPIRED' });
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;
+2. Redux Saga: 흐름 제어
+토큰 만료 액션을 가로채서 로그아웃 처리를 하거나 캐시를 비웁니다.
+
+JavaScript
+import { takeLatest, call, put } from 'redux-saga/effects';
+import { queryClient } from './main'; // 전역 queryClient
+
+function* handleTokenExpired() {
+  console.log('토큰이 만료되었습니다. 정리 작업을 시작합니다.');
+  
+  // 1. React Query 캐시 전체 삭제 (민감 정보 제거)
+  yield call([queryClient, 'clear']);
+  
+  // 2. Redux 스토어의 유저 정보 초기화
+  yield put({ type: 'AUTH/LOGOUT_SUCCESS' });
+  
+  // 3. 페이지 이동 (예: 로그인 화면)
+  window.location.href = '/login';
+}
+
+export function* authSaga() {
+  yield takeLatest('AUTH/TOKEN_EXPIRED', handleTokenExpired);
+}
+3. React Query: 데이터 페칭 (useQuery)
+Saga에서 관리하는 token 상태를 enabled 옵션에 연결하는 것이 핵심입니다.
+
+JavaScript
+import { useQuery } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
+import api from './api';
+
+const fetchTodos = async () => {
+  const { data } = await api.get('/todos');
+  return data;
+};
+
+function TodoList() {
+  // Redux 스토어에서 토큰 유무 확인
+  const { accessToken } = useSelector((state) => state.auth);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['todos'],
+    queryFn: fetchTodos,
+    // ✅ 토큰이 있을 때만 API 호출 및 자동 업데이트 활성화
+    enabled: !!accessToken,
+    // 401 에러 시 무의미한 재시도 방지
+    retry: (failureCount, error) => {
+      if (error.response?.status === 401) return false;
+      return failureCount < 3;
+    },
+  });
+
+  if (!accessToken) return <div>로그인이 필요합니다.</div>;
+  if (isLoading) return <div>로딩 중...</div>;
+
+  return (
+    <ul>
+      {data?.map(todo => <li key={todo.id}>{todo.title}</li>)}
+    </ul>
+  );
+}
+💡 이 조합의 장점
+Saga의 역할 명확화: 더 이상 모든 GET 요청을 위해 TAKE_LATEST, LOADING_START, SUCCESS 액션을 만들 필요가 없습니다. Saga는 로그인/로그아웃, 소켓 통신, 복잡한 비즈니스 워크플로우에만 집중합니다.
+
+React Query의 효율성: API 결과값은 queryKey를 통해 자동으로 캐싱됩니다. 컴포넌트가 다시 마운트되어도 토큰이 유효하다면 즉시 캐시된 데이터를 보여줍니다.
+
+안전한 토큰 관리: Axios Interceptor가 401을 감지하는 순간 Saga가 실행되어 React Query의 enabled가 false가 되고 캐시가 clear되므로, 만료된 토큰으로 인한 무한 요청을 완벽히 차단합니다.
+
+이 구조를 적용하면 기존 Saga 코드의 상당 부분이 제거되어 프로젝트가 훨씬 가벼워질 거예요. 혹시 특정 Saga 로직을 React Query로 옮기는 방법이 더 궁금하신가요?
+
+react-query에서 eanbled와 retry같이 계속 사용하는게 아니라 공통으로 따로 만들수는 없는거야?
+네, 당연히 가능합니다! 매번 useQuery를 호출할 때마다 동일한 설정을 반복하는 것은 번거롭고 실수할 확률도 높죠.
+
+이를 해결하기 위한 두 가지 주요 방법이 있습니다.
+
+1. 전역 설정 (Global Defaults)
+앱 전체에서 모든 쿼리에 공통적으로 적용하고 싶은 설정(예: 특정 에러 코드 시 retry 방지)은 QueryClient를 생성할 때 한 번에 정의할 수 있습니다.
+
+JavaScript
+// queryClient.js (또는 App.js)
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // ✅ 모든 쿼리에 공통 적용되는 설정
+      retry: (failureCount, error) => {
+        if (error.response?.status === 401) return false;
+        return failureCount < 3;
+      },
+      staleTime: 1000 * 60 * 5, // 5분
+      refetchOnWindowFocus: false, // 탭 전환 시 자동 리프레시 끄기
+    },
+  },
+});
+2. 커스텀 훅 (Custom Hooks) - 가장 권장됨
+enabled 처럼 인증 상태(Redux 토큰 등)에 따라 동적으로 변해야 하는 값은 커스텀 훅으로 만드는 것이 가장 깔끔합니다.
+
+JavaScript
+// hooks/useAuthQuery.js
+import { useQuery } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
+
+export function useAuthQuery(queryKey, queryFn, options = {}) {
+  const { accessToken } = useSelector((state) => state.auth);
+
+  return useQuery({
+    queryKey,
+    queryFn,
+    // ✅ 공통 로직: 토큰이 있을 때만 실행
+    enabled: !!accessToken && (options.enabled !== false), 
+    // 개별 쿼리에서 추가로 넘기는 옵션들 합치기
+    ...options,
+  });
+}
+사용 예시:
+이제 컴포넌트에서는 복잡한 설정 없이 커스텀 훅만 불러다 쓰면 됩니다.
+
+JavaScript
+function Profile() {
+  // enabled나 retry를 일일이 적지 않아도 커스텀 훅 내부 로직이 적용됩니다.
+  const { data } = useAuthQuery(['user'], fetchProfile);
+
+  return <div>{data?.name}</div>;
+}
+3. 기능별 팩토리 패턴 (Query Key & Options Factory)
+규모가 큰 프로젝트라면 쿼리 키와 기본 옵션을 관리하는 객체를 따로 두기도 합니다.
+
+JavaScript
+// services/todoService.js
+export const todoQueries = {
+  all: () => ({
+    queryKey: ['todos'],
+    queryFn: fetchTodos,
+    staleTime: 10000,
+  }),
+  detail: (id) => ({
+    queryKey: ['todos', id],
+    queryFn: () => fetchTodoById(id),
+  })
+};
+
+// 컴포넌트에서 사용
+const { data } = useQuery(todoQueries.all());
+요약하자면
+전체에 똑같이 적용될 정적 설정 → QueryClient의 defaultOptions에 작성하세요.
+
+토큰 유무나 전역 상태에 따른 동적 설정 → useAuthQuery 같은 커스텀 훅으로 감싸서 사용하세요.
+
+이렇게 하면 enabled나 retry 로직이 한곳에서 관리되므로, 나중에 "토큰 만료 시 처리 방식"을 변경해야 할 때 커스텀 훅 한 곳만 수정하면 되어 유지보수가 매우 편해집니다.
+
+어떤 방식이 현재 진행 중인 프로젝트 구조에 더 잘 맞을 것 같나요?
+
+staleTime은 어떤걸 의미하고 refetchOnWindowFocus는 브라우저 앱내에서 탭 전환시 해당되는걸까?
+React Query에서 staleTime과 refetchOnWindowFocus는 캐싱과 데이터 최신성을 결정하는 아주 중요한 옵션입니다. 각각의 의미를 쉽게 풀어서 설명해 드릴게요.
+
+1. staleTime (데이터의 "신선도" 유효기간)
+stale은 "신선하지 않은", "상한"이라는 뜻입니다. React Query에서 데이터는 두 가지 상태를 가집니다: Fresh(신선함)와 Stale(신선하지 않음).
+
+의미: 서버에서 데이터를 가져온 후, 이 데이터가 "얼마 동안 신선한 상태로 유지될지"를 정하는 시간(ms)입니다.
+
+작동 방식:
+
+staleTime: 5000 (5초)로 설정하면, 데이터를 가져온 후 5초 동안은 Fresh 상태입니다.
+
+이 5초 동안은 컴포넌트가 다시 마운트되거나 탭을 전환해도 API를 호출하지 않고 캐시된 데이터를 그대로 사용합니다.
+
+5초가 지나면 데이터는 Stale 상태가 됩니다. 이때부터는 특정 조건(마운트, 탭 전환 등)이 발생하면 "데이터가 상했네?"라고 판단하여 백그라운드에서 다시 fetch를 시도합니다.
+
+기본값: 0 (가져오자마자 상한 것으로 간주하여, 기회만 생기면 새로고침함).
+
+2. refetchOnWindowFocus (브라우저 포커스 시 재요청)
+질문하신 것처럼 탭 전환과 직접적인 관련이 있는 옵션입니다.
+
+의미: 브라우저 창(Window)에 다시 포커스가 맞춰졌을 때 데이터를 새로 고칠지 여부를 결정합니다.
+
+해당되는 상황:
+
+탭 전환: 다른 탭을 보다가 다시 우리 앱이 켜진 탭을 클릭했을 때.
+
+창 전환: 다른 프로그램(예: 슬랙, 메모장)을 쓰다가 브라우저 창을 다시 클릭했을 때.
+
+개발자 도구: 개발자 도구 창을 클릭했다가 다시 브라우저 본문을 클릭했을 때도 발생합니다.
+
+조건: 단, 무조건 실행되는 것이 아니라 데이터가 stale 상태일 때만 실행됩니다. 만약 staleTime이 아직 안 끝났다면 탭을 전환해도 재요청이 가지 않습니다.
+
+기본값: true.
+
+💡 실무에서는 어떻게 쓰나요?
+보통 이 두 설정을 조합해서 앱의 성격을 결정합니다.
+
+예시 A: 실시간성이 중요한 주식/코인 앱
+데이터가 금방 변하므로 기본값을 그대로 사용하거나 아주 짧게 잡습니다.
+
+JavaScript
+{
+  staleTime: 0,
+  refetchOnWindowFocus: true // 탭만 눌러도 최신 가격으로 갱신!
+}
+예시 B: 게시판이나 설정 페이지 (정적인 데이터)
+자주 바뀔 일이 없는 데이터는 서버 부하를 줄이기 위해 시간을 늘립니다.
+
+JavaScript
+{
+  staleTime: 1000 * 60 * 5, // 5분 동안은 절대 다시 안 부름
+  refetchOnWindowFocus: false // 다른 탭 갔다 와도 가만히 있음
+}
+요약
+staleTime: 이 시간 동안은 "데이터가 믿을만하다"고 보고 API 호출을 아예 안 함.
+
+refetchOnWindowFocus: 탭 전환 등으로 브라우저가 다시 활성화될 때, 데이터가 stale(신선하지 않음)하다면 자동으로 새로고침함.
+
+사용하시는 환경이 양방향 통신(Saga)을 함께 쓰고 있으므로, 실시간 데이터는 소켓이 처리하고 일반 조회 데이터는 staleTime을 적절히(예: 30초~1분) 주어서 불필요한 API 호출을 막는 것이 성능 최적화의 핵심입니다!
+
+staleTime은 꼭 써야하는거야?
+결론부터 말씀드리면, staleTime을 반드시 써야 하는 것은 아닙니다. 하지만 안 썼을 때(기본값인 경우) 어떤 현상이 벌어지는지 이해하는 것이 중요합니다.
+
+React Query의 기본 설정에서 staleTime은 0입니다. 이 의미는 "데이터를 가져오자마자 상한 것으로 간주하겠다"는 뜻입니다.
+
+1. staleTime을 안 썼을 때 (기본값 0일 때) 발생하는 일
+데이터가 항상 stale(상함) 상태이기 때문에, 다음과 같은 상황에서 무조건 백그라운드 API 재요청이 일어납니다.
+
+다른 페이지에 갔다 돌아왔을 때 (컴포넌트 다시 마운트)
+
+사용자가 브라우저 탭을 클릭했을 때 (refetchOnWindowFocus)
+
+네트워크가 끊겼다 다시 연결됐을 때
+
+"데이터가 캐시되어 있는데 왜 자꾸 호출하지?"라는 의문이 든다면, 바로 이 staleTime이 0이기 때문입니다.
+
+2. 그럼 언제 staleTime을 설정해야 할까요?
+다음과 같은 상황에서는 staleTime을 부여하는 것이 좋습니다.
+
+서버 부하를 줄이고 싶을 때: 자주 바뀌지 않는 데이터(예: 내 프로필 정보, 공지사항, 설정값 등)인데 탭만 옮길 때마다 호출할 필요는 없겠죠.
+
+성능 최적화: 사용자가 앱을 조작할 때 불필요한 네트워크 통신을 줄여 더 쾌적한 환경을 제공하고 싶을 때.
+
+API 비용: 호출 횟수에 따라 돈을 내는 API를 사용할 때.
+
+3. 권장되는 설정 패턴
+보통 프로젝트 전체에 30초에서 1분 정도의 최소한의 staleTime을 주는 경우가 많습니다.
+
+JavaScript
+// 전역 설정 예시
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // 30초 동안은 "데이터가 신선하다"고 믿고 API를 다시 부르지 않음
+      staleTime: 1000 * 30, 
+    },
+  },
+});
+⚠️ 주의: staleTime vs gcTime (구 cacheTime)
+두 개념을 헷갈려하시는 경우가 많습니다.
+
+staleTime: "이 데이터 언제까지 신선해?" (API 호출을 결정)
+
+gcTime (Garbage Collection): "이 데이터 언제까지 메모리에 들고 있을까?" (데이터 보존을 결정)
+
+핵심 요약
+만약 API가 너무 자주 호출되는 것 같아 불편하시다면 staleTime을 5~10초라도 설정해 보세요. 반면, 데이터가 1초가 멀다 하고 바뀌어야 하는 실시간성 앱이라면 기본값 0을 유지하는 것이 맞습니다.
+
+지금 하시는 프로젝트의 데이터들이 얼마나 자주 바뀌는 성격인가요? (예: 게시판 글 리스트 vs 실시간 채팅 목록) 그에 따라 적절한 값을 추천해 드릴 수 있습니다.
+
+난 사용자가 호출할때만 API를 호출하고 싶고 불필요하게 정해진 시간마다 API를 호출해서 업데이트하고 싶지는 않아 그러려면 staleTime을 어떻게 설정해야해?
+사용자의 의도가 명확하시군요! "자동 업데이트는 싫고, 내가 필요할 때(수동)만 호출하고 싶다"는 요구사항을 충족하려면 두 가지 핵심 설정을 조합해야 합니다.
+
+가장 효과적인 방법은 staleTime을 무한대(Infinity)로 설정하는 것입니다.
+
+1. staleTime: Infinity 설정하기
+staleTime을 무한대로 설정하면, React Query는 데이터를 한 번 가져온 후 "이 데이터는 영원히 신선해(Fresh)"라고 판단합니다.
+
+결과: 탭을 전환하거나 컴포넌트가 다시 마운트되어도 절대로 자동으로 API를 다시 호출하지 않습니다.
+
+작동: 오직 캐시에 데이터가 없을 때(첫 호출)만 API를 부릅니다.
+
+JavaScript
+const { data, refetch } = useQuery({
+  queryKey: ['myData'],
+  queryFn: fetchMyData,
+  // ✅ 핵심 설정
+  staleTime: Infinity, 
+  // 탭 전환 시 업데이트 방지를 위해 이것도 명시적으로 끄는 것이 좋습니다.
+  refetchOnWindowFocus: false, 
+});
+2. "사용자가 호출할 때만" 실행하는 법
+만약 첫 진입 시에도 자동으로 호출되는 게 싫고, 사용자가 특정 버튼을 눌렀을 때만 호출하고 싶다면 enabled: false와 refetch를 사용하세요.
+
+JavaScript
+function MyComponent() {
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ['myData'],
+    queryFn: fetchMyData,
+    enabled: false, // 👈 처음 페이지 떴을 때 자동 호출 방지
+    staleTime: Infinity, // 👈 한 번 가져온 후 자동 업데이트 방지
+  });
+
+  return (
+    <div>
+      <button onClick={() => refetch()}>데이터 가져오기</button>
+      {isFetching ? "불러오는 중..." : <pre>{JSON.stringify(data)}</pre>}
+    </div>
+  );
+}
+3. 요약 및 추천 설정
+사용자님의 니즈에 딱 맞는 "가장 깔끔한 공통 옵션"은 다음과 같습니다.
+
+옵션명	설정값	이유
+staleTime	Infinity	데이터를 '상하지 않음'으로 표시해 자동 재요청 차단
+gcTime	(기본 5분 유지)	메모리에서 데이터를 언제 지울지는 별개의 문제이므로 유지 권장
+refetchOnWindowFocus	false	탭 전환 시 업데이트 방지 (staleTime이 무한대면 사실 안 써도 됨)
+refetchOnMount	false	페이지 이동 후 돌아왔을 때 재호출 방지
+💡 팁: 이렇게 설정하더라도 데이터를 강제로 새로고침하고 싶다면, useMutation 성공 시 queryClient.invalidateQueries(['myData'])를 실행하거나, 위 예시처럼 refetch()를 직접 호출하면 됩니다.
+
+이렇게 설정하면 React Query를 마치 "똑똑한 상태 저장소"처럼 사용하면서, 통제권은 온전히 사용자(코드)가 쥐게 됩니다. 이해가 잘 되셨나요?
+
+그럼 react-query를 사용하는 의미가 없지 않을까? 굳이 사용해야할까?
+매우 날카로운 질문입니다! "내가 직접 refetch를 호출할 거라면, 그냥 useEffect랑 useState 쓰는 거랑 뭐가 다르지?"라는 의문이 드는 게 당연합니다.
+
+하지만 자동 업데이트를 끄더라도 React Query를 사용하는 이유는 여전히 강력합니다. 단순히 '언제 호출하느냐'의 문제를 넘어, 그 이후의 '데이터 관리' 수준이 다르기 때문입니다.
+
+직접 구현할 때와 비교해서 어떤 이득이 있는지 핵심만 짚어드릴게요.
+
+1. 캐싱 (메모리 관리)
+직접 코딩하면 페이지를 이동할 때마다 데이터가 날아갑니다. 다시 돌아오면 '로딩 중' 화면을 또 봐야 하죠.
+
+React Query: staleTime이 무한대라도 데이터는 메모리(캐시)에 남아 있습니다. * 사용자가 버튼을 눌러서 한 번 데이터를 받아두면, 다른 페이지에 갔다 돌아왔을 때 서버 호출 없이 즉시 이전 데이터를 보여줄 수 있습니다.
+
+2. 로딩 및 에러 상태의 표준화
+비동기 통신을 할 때마다 isLoading, isError, isFetching 같은 상태 변수를 일일이 만들고 관리하는 건 매우 피곤한 일입니다.
+
+직접 구현: useState 3~4개 + try-catch 문법 도배.
+
+React Query: 객체 하나에서 모든 상태를 완벽하게 제공합니다. 특히 isFetching은 "데이터는 이미 있지만, 뒤에서 새로고침 중일 때"를 구분해 줘서 UX가 훨씬 고급스러워집니다.
+
+3. "중복 호출" 방지 (Deduping)
+만약 한 화면에 똑같은 데이터를 사용하는 컴포넌트가 3개 있다고 가정해 보세요.
+
+직접 구현: 특별한 처리를 안 하면 API가 3번 나갑니다. 이를 막으려면 부모 컴포넌트에서 Props로 내려주거나 전역 Store에 복잡하게 꼬아서 넣어야 합니다.
+
+React Query: queryKey가 같다면, 3곳에서 동시에 호출해도 실제 네트워크 요청은 단 1번만 보냅니다.
+
+4. 성공/실패 후속 조치의 간소화
+데이터를 수동으로 가져온 뒤 무언가 처리해야 할 때(예: 알림 띄우기), useEffect의 의존성 배열을 고민할 필요가 없습니다.
+
+JavaScript
+const { refetch } = useQuery({
+  queryKey: ['user'],
+  queryFn: fetchUser,
+  enabled: false,
+  onSuccess: (data) => console.log("가져오기 성공!", data),
+  onError: (err) => console.error("에러 발생!", err),
+});
+5. 가공된 데이터 공유 (select)
+서버에서 준 원본 데이터 중 특정 부분만 추출하거나 가공해서 쓰고 싶을 때, select 옵션을 쓰면 가공된 데이터만 구독할 수 있습니다. 이 과정에서 발생하는 불필요한 리렌더링도 React Query가 최적화해 줍니다.
+
+💡 결론: 언제 React Query가 '돈값'을 하나요?
+사용자님이 말씀하신 "수동 호출" 상황에서도 React Query는 다음과 같은 역할을 수행하는 '똑똑한 데이터 보관함'이 됩니다.
+
+Redux 보일러플레이트 제거: API 결과를 저장하려고 액션, 리듀서 만드는 수고를 덜어줍니다.
+
+UX 향상: 이미 가져온 데이터는 즉시 보여주고(캐시), 로딩 바는 필요한 순간에만 정확히 보여줍니다.
+
+Saga와의 조화: 복잡한 비동기 흐름은 Saga가 잡고, 그 결과로 나온 데이터의 "보관 및 상태 관리"는 React Query가 전담하는 구조적 깔끔함을 얻을 수 있습니다.
+
+요약하자면: "자동 호출" 기능은 React Query의 수많은 기능 중 하나일 뿐입니다. 캐싱, 상태 표준화, 네트워크 최적화라는 세 가지만으로도 도입할 가치는 충분합니다.
+
+만약 지금 Saga에서 API 응답 값을 Redux Store에 넣고, 로딩 상태를 각각의 리듀서에서 관리하고 계시다면 그 코드들을 싹 지울 수 있다는 게 가장 큰 매력 아닐까요? :)
+
+queryKey는 MFS 마이크로 구조의 앱에서 앱끼리 서로 겹칠일이 없을까?
+마이크로 프론트엔드(MFS) 구조에서는 여러 독립적인 앱(Micro Apps)이 하나의 메인 쉘(Shell) 위에서 동작하기 때문에, queryKey가 충돌할 가능성이 매우 높습니다.
+
+React Query의 캐시는 기본적으로 QueryClientProvider가 감싸고 있는 범위 내에서 공유됩니다. 만약 MFS 환경에서 하나의 공통 QueryClient를 사용 중이라면, App A에서 사용하는 ['user']와 App B에서 사용하는 ['user']는 같은 데이터로 취급되어 서로의 데이터를 덮어쓰거나 엉뚱한 데이터를 캐시에서 꺼내오는 대참사가 발생할 수 있습니다.
+
+이를 방지하기 위한 3가지 전략을 제안해 드립니다.
+
+1. 쿼리 키 네이밍 컨벤션 (Prefix 사용) - 가장 추천
+각 마이크로 앱의 이름을 키의 첫 번째 요소로 넣는 방식입니다. 마치 파일 시스템의 폴더 구조처럼 관리하는 것이죠.
+
+JavaScript
+// App A (주문 앱)
+const { data } = useQuery({
+  queryKey: ['orders', 'list'], // 'orders'라는 접두사 사용
+  queryFn: fetchOrders
+});
+
+// App B (회원 앱)
+const { data } = useQuery({
+  queryKey: ['auth', 'user'], // 'auth'라는 접두사 사용
+  queryFn: fetchUser
+});
+장점: 직관적이며 전역 캐시를 공유하더라도 충돌이 없습니다.
+
+단점: 모든 개발자가 이 규칙을 엄격하게 지켜야 합니다.
+
+2. Query Key Factory 활용
+실수를 방지하기 위해 각 앱마다 쿼리 키를 생성하는 전역 객체를 만들어 사용합니다.
+
+JavaScript
+// apps/order-app/queries.js
+export const orderKeys = {
+  all: ['order-app-unique-id'], // 앱만의 고유 ID를 루트로 설정
+  lists: () => [...orderKeys.all, 'list'],
+  detail: (id) => [...orderKeys.all, 'detail', id],
+};
+
+// 사용 시
+useQuery({ queryKey: orderKeys.lists(), ... });
+3. 독립적인 QueryClient 사용 (Isolated Cache)
+만약 앱끼리 데이터를 공유할 일이 전혀 없고 완벽한 격리를 원한다면, 각 마이크로 앱마다 별도의 QueryClient 인스턴스를 생성하고 각각의 QueryClientProvider로 감싸면 됩니다.
+
+작동 방식: 브라우저 메모리상에 캐시 저장소가 앱 개수만큼 생깁니다.
+
+장점: 키가 겹쳐도 물리적으로 분리된 저장소를 쓰기 때문에 절대 충돌하지 않습니다.
+
+단점: 앱 간에 동일한 데이터(예: 공통 유저 정보)가 있어도 캐시를 공유하지 못해 중복 API 호출이 발생할 수 있습니다.
+
+💡 요약 및 조언
+MFS 구조에서 React Query를 쓴다면 "키 충돌은 무조건 일어난다"고 가정하고 설계해야 합니다.
+
+데이터 공유가 필요한 경우: 1번 방식(Prefix)을 팀 전체 규칙으로 정하세요.
+
+데이터 격리가 최우선인 경우: 3번 방식(독립 Client)을 선택하세요.
+
+보통은 1번(Prefix) 방식을 쓰면서, queryKey를 관리하는 공통 라이브러리를 배포하여 각 팀이 자기 앱의 이름이 담긴 키만 생성할 수 있도록 강제하는 것이 가장 안전한 실무 패턴입니다.
