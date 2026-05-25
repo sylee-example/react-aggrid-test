@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -9,11 +8,15 @@ import { Select } from 'antd'
 
 const CustomMultiSelectEditor = forwardRef(
   (props, ref) => {
-    const { value: initialValue, options = [], placeholder = '선택하세요' } = props
+    const { value: initialValue, options = [], placeholder = '선택하세요', cellStartedEdit } = props
     const [value, setValue] = useState(
       Array.isArray(initialValue) ? initialValue : [],
     )
     const containerRef = useRef(null)
+    // 이 셀이 편집을 시작한 셀인 경우에만 드롭다운 자동 열기
+    const [dropdownOpen, setDropdownOpen] = useState(!!cellStartedEdit)
+    // focusIn() 직후 onOpenChange(false) 경쟁 상태 방지
+    const suppressCloseRef = useRef(false)
 
     useImperativeHandle(ref, () => ({
       getValue() {
@@ -25,19 +28,14 @@ const CustomMultiSelectEditor = forwardRef(
       isCancelAfterEnd() {
         return false
       },
-      isPopup() {
-        return true
-      },
-      getPopupPosition() {
-        return 'under'
+      focusIn() {
+        suppressCloseRef.current = true
+        setDropdownOpen(true)
+        setTimeout(() => {
+          suppressCloseRef.current = false
+        }, 200)
       },
     }))
-
-    useEffect(() => {
-      setTimeout(() => {
-        containerRef.current?.querySelector('input')?.focus()
-      }, 0)
-    }, [])
 
     return (
       <div
@@ -49,14 +47,17 @@ const CustomMultiSelectEditor = forwardRef(
           mode="multiple"
           value={value}
           onChange={(val) => setValue(val)}
+          open={dropdownOpen}
+          onOpenChange={(open) => {
+            if (!open && suppressCloseRef.current) return
+            setDropdownOpen(open)
+          }}
           options={options.map((opt) => ({
             label: opt.label,
             value: opt.value,
           }))}
           placeholder={placeholder}
           className="w-full"
-          autoFocus
-          defaultOpen
           style={{ width: '100%' }}
         />
       </div>

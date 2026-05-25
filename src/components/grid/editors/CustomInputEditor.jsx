@@ -13,9 +13,15 @@ const CustomInputEditor = forwardRef((props, ref) => {
     placeholder = '입력하세요',
     type = 'text',
     maxLength,
+    cellStartedEdit,
   } = props
   const [value, setValue] = useState(initialValue ?? '')
   const inputRef = useRef(null)
+
+  const getNativeInput = () =>
+    inputRef.current?.nativeElement ||
+    inputRef.current?.input ||
+    inputRef.current
 
   useImperativeHandle(ref, () => ({
     getValue() {
@@ -30,12 +36,37 @@ const CustomInputEditor = forwardRef((props, ref) => {
     focusIn() {
       inputRef.current?.focus()
     },
+    focusAtStart() {
+      inputRef.current?.focus()
+      setTimeout(() => {
+        try {
+          getNativeInput()?.setSelectionRange(0, 0)
+        } catch {
+          // email 등 selection 미지원 타입은 무시
+        }
+      }, 0)
+    },
+    focusAtEnd() {
+      inputRef.current?.focus()
+      setTimeout(() => {
+        try {
+          const el = getNativeInput()
+          const len = el?.value?.length || 0
+          el?.setSelectionRange(len, len)
+        } catch {
+          // email 등 selection 미지원 타입은 무시
+        }
+      }, 0)
+    },
   }))
 
+  // 이 셀이 편집을 시작한 셀인 경우에만 자동 포커스
   useEffect(() => {
-    setTimeout(() => {
-      inputRef.current?.focus()
-    }, 0)
+    if (cellStartedEdit) {
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 0)
+    }
   }, [])
 
   const handleKeyDown = (e) => {

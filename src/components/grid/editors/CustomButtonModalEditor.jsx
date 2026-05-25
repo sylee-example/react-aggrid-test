@@ -1,65 +1,69 @@
-import { forwardRef, useImperativeHandle, useState } from "react";
-import { Modal, Input } from "antd";
+import { forwardRef, useImperativeHandle, useState } from 'react'
+import { Button, Modal, Input } from 'antd'
+import { EditOutlined } from '@ant-design/icons'
 
-const { TextArea } = Input;
+const { TextArea } = Input
 
 const CustomButtonModalEditor = forwardRef((props, ref) => {
-  const { value: initialValue, modalTitle = "상세 편집", stopEditing } = props;
-  const [value, setValue] = useState(initialValue ?? "");
-  const [modalOpen, setModalOpen] = useState(true);
+  const { value: initialValue, modalTitle = '상세 편집' } = props
+  const [value, setValue] = useState(initialValue ?? '')
+  const [modalOpen, setModalOpen] = useState(false)
 
   useImperativeHandle(ref, () => ({
     getValue() {
-      return value;
+      return value
     },
     isCancelBeforeStart() {
-      return false;
+      return false
     },
     isCancelAfterEnd() {
-      return !modalOpen;
+      return false
     },
-    isPopup() {
-      return true;
-    },
-  }));
+  }))
 
   const handleOk = () => {
-    setModalOpen(false);
-    // 약간의 지연 후 편집 종료 (모달 애니메이션 완료 후)
-    setTimeout(() => {
-      stopEditing();
-    }, 100);
-  };
+    setModalOpen(false)
+    // full row edit 모드: stopEditing 호출 없이 값만 저장
+    // 행 편집 종료는 키보드 네비게이션(Up/Down)이 처리
+  }
 
   const handleCancel = () => {
-    setValue(initialValue ?? "");
-    setModalOpen(false);
-    setTimeout(() => {
-      stopEditing(true);
-    }, 100);
-  };
+    setValue(initialValue ?? '')
+    setModalOpen(false)
+  }
 
   return (
-    <Modal
-      title={modalTitle}
-      open={modalOpen}
-      onOk={handleOk}
-      onCancel={handleCancel}
-      okText="확인"
-      cancelText="취소"
-      destroyOnHidden
-      width={500}
-    >
-      <TextArea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        rows={4}
-        placeholder="내용을 입력하세요"
-        className="mt-2"
-      />
-    </Modal>
-  );
-});
+    <div className="flex items-center gap-2 h-full px-1">
+      <span className="truncate flex-1 text-sm">{value || '-'}</span>
+      <Button
+        type="link"
+        size="small"
+        icon={<EditOutlined />}
+        onClick={() => setModalOpen(true)}
+      >
+        편집
+      </Button>
+      <Modal
+        title={modalTitle}
+        open={modalOpen}
+        onOk={handleOk}
+        onCancel={handleCancel}
+        okText="확인"
+        cancelText="취소"
+        destroyOnHidden
+        width={500}
+      >
+        <TextArea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          rows={4}
+          placeholder="내용을 입력하세요"
+          className="mt-2"
+        />
+      </Modal>
+    </div>
+  )
+})
 
 CustomButtonModalEditor.displayName = "CustomButtonModalEditor";
 

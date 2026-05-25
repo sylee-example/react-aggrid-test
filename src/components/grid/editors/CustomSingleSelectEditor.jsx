@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -9,9 +8,13 @@ import { Select } from 'antd'
 
 const CustomSingleSelectEditor = forwardRef(
   (props, ref) => {
-    const { value: initialValue, options = [], placeholder = '선택하세요' } = props
+    const { value: initialValue, options = [], placeholder = '선택하세요', cellStartedEdit } = props
     const [value, setValue] = useState(initialValue)
-    const selectRef = useRef(null)
+    const containerRef = useRef(null)
+    // 이 셀이 편집을 시작한 셀인 경우에만 드롭다운 자동 열기
+    const [dropdownOpen, setDropdownOpen] = useState(!!cellStartedEdit)
+    // focusIn() 직후 onOpenChange(false) 경쟁 상태 방지
+    const suppressCloseRef = useRef(false)
 
     useImperativeHandle(ref, () => ({
       getValue() {
@@ -23,20 +26,25 @@ const CustomSingleSelectEditor = forwardRef(
       isCancelAfterEnd() {
         return false
       },
+      focusIn() {
+        suppressCloseRef.current = true
+        setDropdownOpen(true)
+        setTimeout(() => {
+          suppressCloseRef.current = false
+        }, 200)
+      },
     }))
 
-    useEffect(() => {
-      // 에디터가 열리면 자동 포커스
-      setTimeout(() => {
-        selectRef.current?.querySelector('input')?.focus()
-      }, 0)
-    }, [])
-
     return (
-      <div ref={selectRef} className="w-full h-full">
+      <div ref={containerRef} className="w-full h-full">
         <Select
           value={value}
           onChange={(val) => setValue(val)}
+          open={dropdownOpen}
+          onOpenChange={(open) => {
+            if (!open && suppressCloseRef.current) return
+            setDropdownOpen(open)
+          }}
           options={options.map((opt) => ({
             label: opt.label,
             value: opt.value,
@@ -44,8 +52,6 @@ const CustomSingleSelectEditor = forwardRef(
           placeholder={placeholder}
           className="w-full"
           popupMatchSelectWidth={false}
-          autoFocus
-          defaultOpen
           size="small"
           style={{ width: '100%', height: '100%' }}
         />
