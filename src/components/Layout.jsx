@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Layout as AntLayout, Menu } from 'antd'
-import { TableOutlined, HomeOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { TableOutlined, HomeOutlined, ThunderboltOutlined, FormOutlined } from '@ant-design/icons'
 
 const { Header, Content } = AntLayout
 
@@ -19,6 +19,11 @@ const menuItems = [
     key: '/realtime-demo',
     icon: <ThunderboltOutlined />,
     label: <Link to="/realtime-demo">실시간 데몬 연동</Link>,
+  },
+  {
+    key: '/multi-edit-demo',
+    icon: <FormOutlined />,
+    label: <Link to="/multi-edit-demo">멀티 선택 편집</Link>,
   },
 ]
 
