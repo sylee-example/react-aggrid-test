@@ -153,6 +153,15 @@ order-app/
         └── types/                 # 이 앱 전반에서 쓰는 타입
             └── common.ts
 ```
+
+핵심 설계 포인트 몇 가지만 짚으면:
+features/[domain]/ 내부는 항상 api / model / ui 3분할. api는 서버 상태(react-query 훅), model은 클라이언트 상태(redux-saga slice·saga·selectors)와 타입, ui는 컴포넌트. 이 3분할을 모든 feature가 동일하게 따르면 어느 앱 어느 기능을 열어도 같은 자리에서 같은 종류의 파일을 찾게 됩니다. 멀티레포 일관성의 핵심입니다.
+ag-grid는 컬럼 정의(orderColumns.ts)를 컴포넌트에서 분리. 그리드 컴포넌트(OrderGrid.tsx)는 @company/ui의 공통 래퍼(defaultColDef·로케일·페이지네이션이 박힌)를 가져와 쓰고, 이 앱 고유의 컬럼 정의만 주입합니다. 셀 렌더러는 재사용 범위에 따라 위치가 갈리는데, 이 그리드 전용이면 feature 안에, 여러 앱이 공유하면 @company/ui로 승격합니다.
+index.ts public API가 FSD의 정체성. 외부(pages 등)에서는 features/order-list/ui/OrderGrid 같은 내부 경로로 직접 import하지 않고, 반드시 features/order-list(즉 index.ts)에서만 가져옵니다. 내부 구조를 자유롭게 리팩터링해도 바깥에 영향이 없어집니다. eslint-plugin-boundaries로 강제하면 규율이 무너지지 않습니다.
+react-query와 redux-saga의 경계. 서버에서 받아오는 데이터(주문 목록·상세)는 전부 api/의 react-query로, 화면 전용 상태(선택된 필터, 모달 열림, 다단계 폼 진행 상태)나 여러 화면이 공유하는 복잡한 동기화만 model/의 redux-saga로. 이 경계가 흐려지면 같은 데이터를 두 곳에서 관리하게 되니 주의하세요.
+shared/는 "대기실" 개념. 이 앱에서만 쓰는 공용은 여기 두되, 다른 단위 앱도 쓸 것 같으면 @company/* 패키지로 승격시키는 통로로 활용합니다. 앞서 말한 "중복 방어선"이 실제로 작동하는 지점입니다.
+이 골격을 그대로 스타터 템플릿 레포로 만들어두면, 새 단위 앱은 도메인 이름만 바꿔 시작할 수 있습니다. feature가 더 늘거나 여러 feature가 공유하는 도메인 모델이 생기면 그때 entities/ 레이어를 추가하는 식으로 점진 확장하면 됩니다.
+이 구조를 README 형태의 컨벤션 문서로 정리해드릴까요? 템플릿 레포에 같이 넣어두면 팀 전체가 같은 규칙을 따르기 좋습니다.
 레이어 규칙
 의존성 방향 (단방향)
 상위 레이어는 하위 레이어만 의존할 수 있습니다. 역방향은 금지합니다.
