@@ -221,3 +221,27 @@ redux-saga 공통 유틸, 미들웨어
 여러 feature가 공유하는 도메인 모델이 생기면 그때 entities/ 레이어를 추가합니다.
 shared/에 쌓인 코드가 다른 앱에서도 필요해지면 @company/* 패키지로 승격합니다.
 새 단위 앱은 이 구조를 스타터 템플릿에서 복제해 도메인 이름만 교체하여 시작합니다.
+```
+src/
+├── entities/                   # ── 도메인 개념 레이어 (features 아래) ──
+│   └── order/
+│       ├── api/
+│       │   ├── useOrder.ts          # 단건 조회 useQuery (여러 feature 공용)
+│       │   └── queryKeys.ts
+│       ├── model/
+│       │   ├── types.ts             # Order, OrderStatus 등 도메인 타입 ★
+│       │   └── constants.ts         # 상태 코드, 라벨 매핑
+│       ├── ui/
+│       │   ├── OrderStatusBadge.tsx  # 주문 상태 뱃지 (재사용)
+│       │   └── OrderCard.tsx         # 주문 요약 카드 (재사용)
+│       └── index.ts                  # public API ★
+│
+├── features/
+│   ├── order-list/
+│   │   ├── model/
+│   │   │   └── types.ts         # OrderFilter 등 '목록 화면' 전용 타입만 남김
+│   │   │                        # (Order 타입은 entities/order 에서 import)
+│   │   └── ui/
+│   │       └── OrderGrid.tsx    # entities/order 의 OrderStatusBadge 사용
+│   └── ...
+```
