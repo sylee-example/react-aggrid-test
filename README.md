@@ -153,3 +153,62 @@ order-app/
         └── types/                 # 이 앱 전반에서 쓰는 타입
             └── common.ts
 ```
+레이어 규칙
+의존성 방향 (단방향)
+상위 레이어는 하위 레이어만 의존할 수 있습니다. 역방향은 금지합니다.
+Text
+features는 다른 features를 직접 import 하지 않습니다.
+두 개 이상의 feature가 공유하는 코드는 shared로 내리거나, 다른 앱도 쓴다면 @company/* 패키지로 승격합니다.
+Public API 규칙
+외부에서는 feature 내부 경로로 직접 접근하지 않고, 반드시 index.ts를 통해서만 가져옵니다.
+Text
+eslint-plugin-boundaries로 위 두 규칙을 강제하는 것을 권장합니다.
+feature 내부 3분할 (api / model / ui)
+모든 feature는 동일한 3분할을 따릅니다. 어느 앱 어느 기능을 열어도 같은 자리에서 같은 종류의 파일을 찾게 하기 위함입니다.
+폴더
+역할
+관련 스택
+api
+서버 상태 (조회/변경)
+react-query, axios
+model
+클라이언트 상태 + 타입
+redux-saga, slice
+ui
+컴포넌트
+antd, ag-grid
+상태 관리 경계 (react-query vs redux-saga)
+종류
+위치
+예시
+서버 상태
+api/ (react-query)
+주문 목록, 주문 상세
+클라이언트 상태
+model/ (redux-saga)
+선택된 필터, 모달 열림, 다단계 폼 진행
+같은 데이터를 양쪽에서 중복 관리하지 않도록 경계를 명확히 합니다.
+ag-grid 컨벤션
+공통 설정(defaultColDef, 로케일, 페이지네이션)은 @company/ui의 그리드 래퍼에 둡니다.
+각 feature는 컬럼 정의(orderColumns.ts)만 분리해서 주입합니다.
+셀 렌더러는 재사용 범위로 위치를 결정합니다.
+이 그리드 전용 → feature 내부 ui/cellRenderers/
+여러 앱 공유 → @company/ui로 승격
+공통 패키지 (사내 private registry)
+패키지
+내용
+@company/ui
+antd 테마, 공통 컴포넌트, ag-grid 래퍼
+@company/api-client
+axios 인스턴스 (인터셉터, 에러 핸들링, 인증)
+@company/types
+여러 앱이 공유하는 공통 타입 (백엔드 계약 등)
+@company/config
+eslint-config, tsconfig, prettier
+@company/store-utils
+redux-saga 공통 유틸, 미들웨어
+확장 가이드
+시작은 app / pages / features / shared 4레이어로 충분합니다.
+여러 feature가 공유하는 도메인 모델이 생기면 그때 entities/ 레이어를 추가합니다.
+shared/에 쌓인 코드가 다른 앱에서도 필요해지면 @company/* 패키지로 승격합니다.
+새 단위 앱은 이 구조를 스타터 템플릿에서 복제해 도메인 이름만 교체하여 시작합니다.
